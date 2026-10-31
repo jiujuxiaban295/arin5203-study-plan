@@ -36,6 +36,8 @@
 
 ## Cheatsheet 的"skill 模式"
 
+已按此结构建成 [cheatsheet/](cheatsheet/README.md)（2026-10-31）：索引 README → 16 张卡 → 讲义 PDF 页链接，渐进式披露。
+
 每张卡固定四段，考场上按题目形状找卡：
 
 ```
