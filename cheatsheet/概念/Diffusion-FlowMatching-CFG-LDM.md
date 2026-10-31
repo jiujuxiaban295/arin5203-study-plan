@@ -52,6 +52,7 @@
 
 ## 讲义出处
 
+- 图解（六张示意图）：[cheatsheet/图解/diffusion与多模态.html](../图解/diffusion与多模态.html)，在线版 https://claude.ai/artifact/QCcaEWea7k6izudjB3yrpa
 - DDPM 两过程、训练、采样：[Lecture 8 第 51–60 页](https://cqf.io/ARIN5203/lectures/Lecture8.pdf#page=51)；网络与 t 嵌入：[第 61 页](https://cqf.io/ARIN5203/lectures/Lecture8.pdf#page=61)；噪声表：[第 62 页](https://cqf.io/ARIN5203/lectures/Lecture8.pdf#page=62)
 - 直觉版：[Lecture 12 第 4–7 页](https://cqf.io/ARIN5203/lectures/Lecture12.pdf#page=4)
 - Rectified flow 训练与采样：[Lecture 12 第 8–23 页](https://cqf.io/ARIN5203/lectures/Lecture12.pdf#page=8)；flow matching 路径自由：[Lecture 9 第 42–50 页](https://cqf.io/ARIN5203/lectures/Lecture9.pdf#page=42)

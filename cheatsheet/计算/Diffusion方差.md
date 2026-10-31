@@ -34,6 +34,7 @@ E[x_t]   = √(1−β_t) · E[x_{t−1}]
 
 ## 讲义出处
 
+- 图解（六张示意图）：[cheatsheet/图解/diffusion与多模态.html](../图解/diffusion与多模态.html)，在线版 https://claude.ai/artifact/QCcaEWea7k6izudjB3yrpa
 - 正向过程与 diffusion kernel：[Lecture 8 第 52–53 页](https://cqf.io/ARIN5203/lectures/Lecture8.pdf#page=52)
 - 噪声表 β_t：[Lecture 8 第 62 页](https://cqf.io/ARIN5203/lectures/Lecture8.pdf#page=62)
 - 流程、训练、采样见概念卡 [Diffusion／Flow matching／CFG／LDM](../概念/Diffusion-FlowMatching-CFG-LDM.md)

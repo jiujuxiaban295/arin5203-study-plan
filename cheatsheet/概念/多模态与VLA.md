@@ -41,6 +41,7 @@
 
 ## 讲义出处
 
+- 图解（六张示意图）：[cheatsheet/图解/diffusion与多模态.html](../图解/diffusion与多模态.html)，在线版 https://claude.ai/artifact/QCcaEWea7k6izudjB3yrpa
 - ViT 结构：[Lecture 6 第 40–49 页](https://cqf.io/ARIN5203/lectures/Lecture6.pdf#page=40)；数据量比较：[第 53–57 页](https://cqf.io/ARIN5203/lectures/Lecture6.pdf#page=53)
 - 多模态定义与三件套：[Lecture 11 第 3 页](https://cqf.io/ARIN5203/lectures/Lecture11.pdf#page=3)、[第 9–10 页](https://cqf.io/ARIN5203/lectures/Lecture11.pdf#page=9)
 - CLIP：[第 11–12 页](https://cqf.io/ARIN5203/lectures/Lecture11.pdf#page=11)；Flamingo：[第 13 页](https://cqf.io/ARIN5203/lectures/Lecture11.pdf#page=13)；LLaVA：[第 15 页](https://cqf.io/ARIN5203/lectures/Lecture11.pdf#page=15)；挑战：[第 20 页](https://cqf.io/ARIN5203/lectures/Lecture11.pdf#page=20)

@@ -1,0 +1,315 @@
+<title>Diffusion 与多模态图解</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* 布局：单列讲义纸，每节一张图 + 三行说明；图用内联 SVG，颜色全部走 token */
+  :root {
+    --bg: #f7f5f0;
+    --paper: #fffdf8;
+    --ink: #1f2430;
+    --muted: #6b7280;
+    --line: #cfc9bd;
+    --fixed: #2f6f8f;      /* 固定、不学的东西 */
+    --fixed-soft: #d7e8f0;
+    --learn: #c2552c;      /* 可学的网络 */
+    --learn-soft: #f6ddd2;
+    --noise: #8a8f9c;
+    --ok: #3a7d44;
+    --ok-soft: #dcecdf;
+    --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181e; --paper: #1d2129; --ink: #e8e6e0; --muted: #9aa0ab; --line: #3a404b;
+      --fixed: #7fb6d1; --fixed-soft: #22384a; --learn: #e98a62; --learn-soft: #4a2c22;
+      --noise: #8a8f9c; --ok: #8cc896; --ok-soft: #233a28; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181e; --paper: #1d2129; --ink: #e8e6e0; --muted: #9aa0ab; --line: #3a404b;
+    --fixed: #7fb6d1; --fixed-soft: #22384a; --learn: #e98a62; --learn-soft: #4a2c22;
+    --noise: #8a8f9c; --ok: #8cc896; --ok-soft: #233a28; color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); line-height: 1.6;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+  main { max-width: 860px; margin: 0 auto; display: grid; gap: 28px; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); max-width: 65ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 22px; font-size: .9rem; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; }
+  .legend .f::before { background: var(--fixed-soft); border: 2px solid var(--fixed); }
+  .legend .l::before { background: var(--learn-soft); border: 2px solid var(--learn); }
+  .legend .n::before { background: var(--noise); }
+  section { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; min-width: 0; }
+  section h2 { font-size: 1.15rem; margin: 0 0 4px; }
+  section h2 small { font-weight: 400; color: var(--muted); font-size: .85rem; margin-left: 8px; }
+  .fig { overflow-x: auto; margin: 10px 0 6px; }
+  svg { display: block; max-width: 100%; height: auto; font-family: var(--font-body); font-size: 13px; }
+  svg .mono { font-family: var(--font-mono); font-size: 12px; }
+  svg text { fill: var(--ink); }
+  svg .muted { fill: var(--muted); }
+  svg .box-f { fill: var(--fixed-soft); stroke: var(--fixed); stroke-width: 1.5; }
+  svg .box-l { fill: var(--learn-soft); stroke: var(--learn); stroke-width: 1.5; }
+  svg .box-n { fill: var(--paper); stroke: var(--line); stroke-width: 1.2; }
+  svg .arrow { stroke: var(--ink); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+  svg .arrow-f { stroke: var(--fixed); stroke-width: 1.8; fill: none; marker-end: url(#ahf); }
+  svg .arrow-l { stroke: var(--learn); stroke-width: 1.8; fill: none; marker-end: url(#ahl); }
+  ol, ul { margin: 6px 0 0; padding-left: 1.3em; max-width: 68ch; }
+  li { margin: 2px 0; }
+  code { font-family: var(--font-mono); font-size: .9em; background: var(--bg); padding: 1px 5px; border-radius: 3px; }
+  .note { font-size: .9rem; color: var(--muted); margin: 8px 0 0; max-width: 68ch; }
+  @media (prefers-reduced-motion: no-preference) { }
+</style>
+
+<main>
+  <header>
+    <h1>Diffusion 与多模态图解</h1>
+    <p>只画数据怎么流、哪些框是固定的、哪些框是学出来的。看图时盯住颜色：蓝色不学，橙色要学。</p>
+    <div class="legend"><span class="f">固定、没有参数</span><span class="l">神经网络，训练时更新</span><span class="n">随机噪声</span></div>
+  </header>
+
+  <!-- 1. Diffusion 两条过程 -->
+  <section>
+    <h2>① Diffusion：加雾是固定的，擦雾是学的</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 300" width="820" height="300" role="img" aria-label="Diffusion 正向加噪与反向去噪时间线">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink)"/></marker>
+          <marker id="ahf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--fixed)"/></marker>
+          <marker id="ahl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--learn)"/></marker>
+          <pattern id="snow" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="var(--paper)"/><circle cx="1.5" cy="1.5" r="1.2" fill="var(--noise)"/><circle cx="4.5" cy="4" r="1" fill="var(--noise)"/></pattern>
+        </defs>
+        <!-- 图片方块 -->
+        <g>
+          <rect x="30" y="110" width="80" height="80" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/>
+          <text x="70" y="160" text-anchor="middle" font-size="34">🐱</text>
+          <text x="70" y="215" text-anchor="middle" class="mono">x₀ 真图</text>
+
+          <rect x="190" y="110" width="80" height="80" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/>
+          <text x="230" y="160" text-anchor="middle" font-size="34">🐱</text>
+          <rect x="190" y="110" width="80" height="80" rx="6" fill="url(#snow)" opacity=".35"/>
+          <text x="230" y="215" text-anchor="middle" class="mono">x₁</text>
+
+          <rect x="350" y="110" width="80" height="80" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/>
+          <text x="390" y="160" text-anchor="middle" font-size="34" opacity=".55">🐱</text>
+          <rect x="350" y="110" width="80" height="80" rx="6" fill="url(#snow)" opacity=".7"/>
+          <text x="390" y="215" text-anchor="middle" class="mono">x_t 半雾</text>
+
+          <text x="500" y="156" text-anchor="middle" class="muted" font-size="22">…</text>
+
+          <rect x="560" y="110" width="80" height="80" rx="6" fill="url(#snow)" stroke="var(--line)"/>
+          <text x="600" y="215" text-anchor="middle" class="mono">x_T 雪花</text>
+          <text x="600" y="233" text-anchor="middle" class="muted mono">≈ N(0, I)</text>
+        </g>
+        <!-- 正向箭头 -->
+        <g>
+          <path class="arrow-f" d="M115 130 H185"/><path class="arrow-f" d="M275 130 H345"/><path class="arrow-f" d="M435 130 H480"/><path class="arrow-f" d="M520 130 H555"/>
+          <rect x="30" y="40" width="610" height="46" rx="6" class="box-f"/>
+          <text x="335" y="58" text-anchor="middle" font-weight="700">正向：每步调暗一点、撒一点噪声（固定，没有参数）</text>
+          <text x="335" y="78" text-anchor="middle" class="mono">x_t = √(1−β_t)·x_{t−1} + √β_t·ε</text>
+        </g>
+        <!-- 反向箭头 -->
+        <g>
+          <path class="arrow-l" d="M555 175 H440"/><path class="arrow-l" d="M345 175 H275"/><path class="arrow-l" d="M185 175 H115"/>
+          <rect x="30" y="250" width="610" height="40" rx="6" class="box-l"/>
+          <text x="335" y="275" text-anchor="middle" font-weight="700">反向：网络 ε_θ(x_t, t) 猜"这步加了什么噪声"，减掉它（学的）</text>
+        </g>
+        <!-- 右侧说明 -->
+        <text x="680" y="130" class="muted">T 常为几百到一千</text>
+        <text x="680" y="150" class="muted">β_t 是预先定好的表</text>
+        <text x="680" y="180" class="muted">擦雾时每步要跑一次</text>
+        <text x="680" y="200" class="muted">网络，所以采样慢</text>
+      </svg>
+    </div>
+    <ul>
+      <li>蓝色那条线你自己就能算，不需要网络；橙色那条线才是训练对象。</li>
+      <li>去年 Q2.2 考的就是蓝色公式里的方差，见第 ③ 张图。</li>
+    </ul>
+  </section>
+
+  <!-- 2. 训练与采样 -->
+  <section>
+    <h2>② 训练出题有免费答案；生成从雪花擦 T 步</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 330" width="820" height="330" role="img" aria-label="Diffusion 训练循环与采样循环">
+        <text x="20" y="24" font-weight="700">训练（一轮）</text>
+        <rect x="20" y="40" width="110" height="52" rx="6" class="box-n"/><text x="75" y="62" text-anchor="middle">抽一张真图 x₀</text><text x="75" y="80" text-anchor="middle" class="muted">抽一个步数 t</text>
+        <path class="arrow" d="M135 66 H165"/>
+        <rect x="170" y="40" width="150" height="52" rx="6" class="box-f"/><text x="245" y="62" text-anchor="middle">一步跳到 x_t</text><text x="245" y="80" text-anchor="middle" class="muted">自己撒的噪声 ε，答案在手</text>
+        <path class="arrow" d="M325 66 H355"/>
+        <rect x="360" y="40" width="130" height="52" rx="6" class="box-l"/><text x="425" y="62" text-anchor="middle">网络 ε_θ(x_t, t)</text><text x="425" y="80" text-anchor="middle" class="muted">猜噪声 ε̂</text>
+        <path class="arrow" d="M495 66 H525"/>
+        <rect x="530" y="40" width="130" height="52" rx="6" class="box-n"/><text x="595" y="62" text-anchor="middle">对答案</text><text x="595" y="80" text-anchor="middle" class="mono">‖ε − ε̂‖²</text>
+        <path class="arrow-l" d="M595 97 V120 H425 V97"/>
+        <text x="510" y="135" text-anchor="middle" class="muted">梯度回传，只更新橙色框</text>
+        <text x="680" y="62" class="muted">不需要标签：</text><text x="680" y="80" class="muted">噪声是自己加的</text>
+
+        <text x="20" y="190" font-weight="700">生成（采样）</text>
+        <rect x="20" y="206" width="90" height="52" rx="6" fill="url(#snow)" stroke="var(--line)"/><text x="65" y="282" text-anchor="middle" class="mono">x_T ~ N(0, I)</text>
+        <path class="arrow" d="M115 232 H145"/>
+        <rect x="150" y="206" width="130" height="52" rx="6" class="box-l"/><text x="215" y="228" text-anchor="middle">网络猜噪声</text><text x="215" y="246" text-anchor="middle" class="muted">减掉一点</text>
+        <path class="arrow" d="M285 232 H315"/>
+        <rect x="320" y="206" width="90" height="52" rx="6" class="box-n"/><text x="365" y="236" text-anchor="middle" class="mono">x_{t−1}</text>
+        <path class="arrow" d="M365 262 V295 H215 V262"/>
+        <text x="290" y="312" text-anchor="middle" class="muted">重复 T 次</text>
+        <path class="arrow" d="M415 232 H455"/>
+        <rect x="460" y="206" width="80" height="52" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="500" y="240" text-anchor="middle" font-size="26">🐱</text><text x="500" y="282" text-anchor="middle" class="mono">x₀ 新图</text>
+        <text x="570" y="222" class="muted">起点是随机的，所以每次</text><text x="570" y="240" class="muted">出不同的图；要跑 T 次</text><text x="570" y="258" class="muted">网络，所以慢</text>
+      </svg>
+    </div>
+    <ul>
+      <li>训练时"一步跳到 x_t"用闭式公式 <code>x_t = √ᾱ_t·x₀ + √(1−ᾱ_t)·ε</code>，不用真走 t 步。</li>
+      <li>放回第 4 天的表：预测噪声、MSE；采样 T 步；没有精确密度；起点雪花就是 z；不要标签。</li>
+    </ul>
+  </section>
+
+  <!-- 3. 方差保持 -->
+  <section>
+    <h2>③ 方差为什么保持：一个像素的账</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 230" width="820" height="230" role="img" aria-label="方差保持示意：旧方差乘 (1−β) 加 β 仍为 1">
+        <!-- 三根柱子 -->
+        <g>
+          <rect x="60" y="40" width="70" height="140" fill="var(--ok-soft)" stroke="var(--line)"/>
+          <text x="95" y="200" text-anchor="middle" class="mono">Var(x_{t−1})</text><text x="95" y="218" text-anchor="middle">= 1</text>
+          <text x="165" y="115" text-anchor="middle" font-size="18">×(1−β)</text>
+          <rect x="210" y="68" width="70" height="112" fill="var(--ok-soft)" stroke="var(--line)"/>
+          <text x="245" y="200" text-anchor="middle">调暗后</text><text x="245" y="218" text-anchor="middle" class="mono">(1−β)</text>
+          <text x="315" y="115" text-anchor="middle" font-size="18">+</text>
+          <rect x="350" y="152" width="70" height="28" fill="var(--noise)" stroke="var(--line)"/>
+          <text x="385" y="200" text-anchor="middle">撒的噪声</text><text x="385" y="218" text-anchor="middle" class="mono">β</text>
+          <text x="455" y="115" text-anchor="middle" font-size="18">=</text>
+          <rect x="490" y="68" width="70" height="112" fill="var(--ok-soft)" stroke="var(--line)"/>
+          <rect x="490" y="40" width="70" height="28" fill="var(--noise)" stroke="var(--line)"/>
+          <text x="525" y="200" text-anchor="middle" class="mono">Var(x_t)</text><text x="525" y="218" text-anchor="middle">= 1，不变</text>
+        </g>
+        <text x="600" y="60" font-weight="700">三条规则</text>
+        <text x="600" y="84">系数 √(1−β) 平方 → (1−β)</text>
+        <text x="600" y="106">独立的两项，方差相加</text>
+        <text x="600" y="128">ε 的方差是 1（整张图写 I）</text>
+        <text x="600" y="160" class="muted">每步都不变 → 第 T 步方差仍为 1</text>
+        <text x="600" y="180" class="muted">均值每步乘 √(1−β) → 趋近 0</text>
+        <text x="600" y="200" class="muted">所以 x_T 正好是 N(0, I) 的雪花</text>
+      </svg>
+    </div>
+    <ul>
+      <li>I 只是说"每个像素各自方差 1、互不相关"。当一个像素算，答案后面补个 I。</li>
+      <li>旧方差改成 4：0.9×4 + 0.1 = 3.7。规则不变，只是柱子高度变。</li>
+    </ul>
+  </section>
+
+  <!-- 4. 多模态三件套 -->
+  <section>
+    <h2>④ 多模态 LLM：三件套，LLM 不知道自己在看图</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 330" width="820" height="330" role="img" aria-label="多模态 LLM 三件套数据流">
+        <!-- 输入图 -->
+        <rect x="20" y="60" width="90" height="70" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="65" y="104" text-anchor="middle" font-size="28">🧊</text>
+        <text x="65" y="150" text-anchor="middle" class="muted">冰箱照片</text>
+        <path class="arrow" d="M115 95 H150"/>
+        <!-- 图像编码器 -->
+        <rect x="155" y="55" width="120" height="80" rx="6" class="box-l"/>
+        <text x="215" y="85" text-anchor="middle" font-weight="700">① 图像编码器</text><text x="215" y="105" text-anchor="middle" class="muted">ViT（常用 CLIP 的）</text>
+        <path class="arrow" d="M280 95 H315"/>
+        <!-- 一串向量 -->
+        <g>
+          <rect x="320" y="70" width="14" height="50" fill="var(--fixed-soft)" stroke="var(--fixed)"/><rect x="338" y="70" width="14" height="50" fill="var(--fixed-soft)" stroke="var(--fixed)"/><rect x="356" y="70" width="14" height="50" fill="var(--fixed-soft)" stroke="var(--fixed)"/><text x="384" y="100" text-anchor="middle" class="muted">…</text><rect x="398" y="70" width="14" height="50" fill="var(--fixed-soft)" stroke="var(--fixed)"/>
+          <text x="366" y="150" text-anchor="middle" class="muted">196 个图像向量</text><text x="366" y="168" text-anchor="middle" class="muted">（每个 patch 一个）</text>
+        </g>
+        <path class="arrow" d="M418 95 H453"/>
+        <!-- projector -->
+        <rect x="458" y="55" width="120" height="80" rx="6" class="box-l"/>
+        <text x="518" y="85" text-anchor="middle" font-weight="700">② Projector</text><text x="518" y="105" text-anchor="middle" class="muted">一两层线性，翻译</text>
+        <path class="arrow" d="M583 95 H618"/>
+        <!-- 词向量空间的向量 -->
+        <g>
+          <rect x="623" y="70" width="14" height="50" fill="var(--learn-soft)" stroke="var(--learn)"/><rect x="641" y="70" width="14" height="50" fill="var(--learn-soft)" stroke="var(--learn)"/><rect x="659" y="70" width="14" height="50" fill="var(--learn-soft)" stroke="var(--learn)"/><text x="687" y="100" text-anchor="middle" class="muted">…</text><rect x="701" y="70" width="14" height="50" fill="var(--learn-soft)" stroke="var(--learn)"/>
+          <text x="669" y="150" text-anchor="middle" class="muted">变成"长得像词向量"</text><text x="669" y="168" text-anchor="middle" class="muted">的 196 个向量</text>
+        </g>
+        <!-- 文字输入 -->
+        <rect x="20" y="200" width="200" height="40" rx="6" class="box-n"/><text x="120" y="225" text-anchor="middle">"今晚能做什么菜？"</text>
+        <path class="arrow" d="M225 220 H260"/>
+        <g>
+          <rect x="265" y="195" width="14" height="50" fill="var(--learn-soft)" stroke="var(--learn)"/><rect x="283" y="195" width="14" height="50" fill="var(--learn-soft)" stroke="var(--learn)"/><rect x="301" y="195" width="14" height="50" fill="var(--learn-soft)" stroke="var(--learn)"/><text x="329" y="225" text-anchor="middle" class="muted">…</text>
+          <text x="300" y="265" text-anchor="middle" class="muted">文字 token 的词向量</text>
+        </g>
+        <!-- 汇合到 LLM -->
+        <path class="arrow" d="M669 125 V175 H520 V230 H560"/>
+        <path class="arrow" d="M345 220 H375 V230 H560"/>
+        <rect x="565" y="195" width="130" height="70" rx="6" class="box-l"/>
+        <text x="630" y="222" text-anchor="middle" font-weight="700">③ LLM</text><text x="630" y="242" text-anchor="middle" class="muted">decoder，预测下一个词</text>
+        <path class="arrow" d="M700 230 H735"/>
+        <text x="740" y="226">"有番茄和鸡蛋，</text><text x="740" y="246">可以做番茄炒蛋"</text>
+        <text x="20" y="305" class="muted">训练目标：以图像 token 和文字 token 为条件，预测下一个词。对 LLM 来说，图像向量只是一段"它读不懂来历"的词向量，排在文字前面一起处理。</text>
+      </svg>
+    </div>
+    <ul>
+      <li>三件各自的输入输出：图 → 一串向量；一串向量 → 词向量空间的一串向量；图像向量 + 文字向量 → 文字。</li>
+      <li>多选陷阱："只靠文本训练""只处理结构化数据"与图矛盾；"能处理和生成文本、图像、动作"按本课口径判对（VLA 就是多输出一种动作）。</li>
+    </ul>
+  </section>
+
+  <!-- 5. CLIP -->
+  <section>
+    <h2>⑤ CLIP：图和句子配对，对角线要亮</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 300" width="820" height="300" role="img" aria-label="CLIP 对比学习矩阵与 zero-shot 分类">
+        <!-- 左：训练矩阵 -->
+        <text x="20" y="24" font-weight="700">训练：一批图 × 一批句子，算相似度表</text>
+        <rect x="20" y="40" width="100" height="60" rx="6" class="box-l"/><text x="70" y="66" text-anchor="middle">图像编码器</text><text x="70" y="84" text-anchor="middle" class="muted">(ViT)</text>
+        <rect x="20" y="110" width="100" height="60" rx="6" class="box-l"/><text x="70" y="136" text-anchor="middle">文本编码器</text><text x="70" y="154" text-anchor="middle" class="muted">(Transformer)</text>
+        <!-- 矩阵 -->
+        <g font-size="12">
+          <text x="200" y="60" text-anchor="middle" font-size="22">🐱</text><text x="200" y="100" text-anchor="middle" font-size="22">🐶</text><text x="200" y="140" text-anchor="middle" font-size="22">🚗</text>
+          <text x="250" y="36" text-anchor="middle">"a cat"</text><text x="300" y="36" text-anchor="middle">"a dog"</text><text x="350" y="36" text-anchor="middle">"a car"</text>
+          <rect x="228" y="42" width="44" height="30" fill="var(--ok)" opacity=".85"/><rect x="278" y="42" width="44" height="30" fill="var(--line)" opacity=".5"/><rect x="328" y="42" width="44" height="30" fill="var(--line)" opacity=".5"/>
+          <rect x="228" y="82" width="44" height="30" fill="var(--line)" opacity=".5"/><rect x="278" y="82" width="44" height="30" fill="var(--ok)" opacity=".85"/><rect x="328" y="82" width="44" height="30" fill="var(--line)" opacity=".5"/>
+          <rect x="228" y="122" width="44" height="30" fill="var(--line)" opacity=".5"/><rect x="278" y="122" width="44" height="30" fill="var(--line)" opacity=".5"/><rect x="328" y="122" width="44" height="30" fill="var(--ok)" opacity=".85"/>
+        </g>
+        <text x="200" y="185" class="muted">对比损失：对角线（正确配对）相似度拉高，</text><text x="200" y="203" class="muted">其他格子拉低。不是分类交叉熵，和 RLHF 无关。</text>
+        <!-- 右：zero-shot -->
+        <text x="470" y="24" font-weight="700">测试：zero-shot 分类，文本编码器可丢</text>
+        <rect x="470" y="40" width="70" height="60" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="505" y="78" text-anchor="middle" font-size="26">🐱</text>
+        <path class="arrow" d="M545 70 H580"/>
+        <rect x="585" y="40" width="100" height="60" rx="6" class="box-l"/><text x="635" y="74" text-anchor="middle">图像编码器</text>
+        <path class="arrow" d="M690 70 H725"/>
+        <text x="730" y="60">和"a cat / a dog /</text><text x="730" y="78">a car" 的向量比</text><text x="730" y="96">相似度，取最大</text>
+        <text x="470" y="140" class="muted">类别名的向量提前算好一次就够，所以讲义说</text><text x="470" y="158" class="muted">测试时可以丢掉文本编码器，图像编码器单独用。</text>
+        <text x="470" y="195" class="muted">这个图像编码器就是多模态 LLM 三件套的第 ① 件。</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 6. LLaVA -->
+  <section>
+    <h2>⑥ LLaVA 两阶段：视觉编码器始终冻结</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 240" width="820" height="240" role="img" aria-label="LLaVA 两阶段训练，视觉编码器冻结">
+        <g>
+          <text x="20" y="24" font-weight="700">阶段 1：对齐预训练</text>
+          <text x="20" y="44" class="muted">59.5 万图文对，让 projector 学会"翻译"</text>
+          <rect x="20" y="60" width="110" height="60" rx="6" class="box-f"/><text x="75" y="86" text-anchor="middle">视觉编码器</text><text x="75" y="104" text-anchor="middle" class="muted">❄ 冻结</text>
+          <path class="arrow" d="M135 90 H165"/>
+          <rect x="170" y="60" width="90" height="60" rx="6" class="box-l"/><text x="215" y="86" text-anchor="middle">Projector</text><text x="215" y="104" text-anchor="middle" class="muted">🔥 更新</text>
+          <path class="arrow" d="M265 90 H295"/>
+          <rect x="300" y="60" width="90" height="60" rx="6" class="box-l"/><text x="345" y="86" text-anchor="middle">LLM</text><text x="345" y="104" text-anchor="middle" class="muted">🔥 更新</text>
+        </g>
+        <g>
+          <text x="430" y="24" font-weight="700">阶段 2：有监督微调</text>
+          <text x="430" y="44" class="muted">多模态对话、推理数据</text>
+          <rect x="430" y="60" width="110" height="60" rx="6" class="box-f"/><text x="485" y="86" text-anchor="middle">视觉编码器</text><text x="485" y="104" text-anchor="middle" class="muted">❄ 冻结</text>
+          <path class="arrow" d="M545 90 H575"/>
+          <rect x="580" y="60" width="90" height="60" rx="6" class="box-l"/><text x="625" y="86" text-anchor="middle">Projector</text><text x="625" y="104" text-anchor="middle" class="muted">🔥 更新</text>
+          <path class="arrow" d="M675 90 H705"/>
+          <rect x="710" y="60" width="90" height="60" rx="6" class="box-l"/><text x="755" y="86" text-anchor="middle">LLM</text><text x="755" y="104" text-anchor="middle" class="muted">🔥 更新</text>
+        </g>
+        <text x="20" y="160" class="muted">这里的"对齐"是图文向量空间对齐，和 RLHF／DPO 的"对齐人类偏好"是两个词。</text>
+        <text x="20" y="182" class="muted">Flamingo 是另一条路：预训练视觉编码器 + 语言模型"联姻"，吃任意交错的图文，做多模态 in-context learning。</text>
+        <text x="20" y="214" class="muted">多选判断：LLaVA 更新视觉编码器 ✗；CLIP 用交叉熵 ✗；训练目标是条件语言建模 ✓；CLIP 测试必须两个编码器 ✗。</text>
+      </svg>
+    </div>
+  </section>
+
+  <p class="note">对应卡片：cheatsheet/计算/Diffusion方差、概念/Diffusion-FlowMatching-CFG-LDM、概念/多模态与VLA。讲义页：Lecture 8 第 51–60 页；Lecture 11 第 9–15 页。</p>
+</main>
