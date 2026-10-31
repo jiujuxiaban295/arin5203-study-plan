@@ -1,0 +1,275 @@
+<title>Flow Matching、CFG 与 LDM 图解</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* 布局：与第一页图解相同的讲义纸；每节一张内联 SVG + 两三行说明 */
+  :root {
+    --bg: #f7f5f0; --paper: #fffdf8; --ink: #1f2430; --muted: #6b7280; --line: #cfc9bd;
+    --fixed: #2f6f8f; --fixed-soft: #d7e8f0;
+    --learn: #c2552c; --learn-soft: #f6ddd2;
+    --noise: #8a8f9c; --ok: #3a7d44; --ok-soft: #dcecdf; --warn: #b8860b;
+    --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181e; --paper: #1d2129; --ink: #e8e6e0; --muted: #9aa0ab; --line: #3a404b;
+      --fixed: #7fb6d1; --fixed-soft: #22384a; --learn: #e98a62; --learn-soft: #4a2c22;
+      --noise: #8a8f9c; --ok: #8cc896; --ok-soft: #233a28; --warn: #e0b84a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181e; --paper: #1d2129; --ink: #e8e6e0; --muted: #9aa0ab; --line: #3a404b;
+    --fixed: #7fb6d1; --fixed-soft: #22384a; --learn: #e98a62; --learn-soft: #4a2c22;
+    --noise: #8a8f9c; --ok: #8cc896; --ok-soft: #233a28; --warn: #e0b84a; color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-body); line-height: 1.6;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+  main { max-width: 860px; margin: 0 auto; display: grid; gap: 28px; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); max-width: 65ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 22px; font-size: .9rem; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; }
+  .legend .f::before { background: var(--fixed-soft); border: 2px solid var(--fixed); }
+  .legend .l::before { background: var(--learn-soft); border: 2px solid var(--learn); }
+  .legend .n::before { background: var(--noise); }
+  section { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; min-width: 0; }
+  section h2 { font-size: 1.15rem; margin: 0 0 4px; }
+  .fig { overflow-x: auto; margin: 10px 0 6px; }
+  svg { display: block; max-width: 100%; height: auto; font-family: var(--font-body); font-size: 13px; }
+  svg .mono { font-family: var(--font-mono); font-size: 12px; }
+  svg text { fill: var(--ink); }
+  svg .muted { fill: var(--muted); }
+  svg .box-f { fill: var(--fixed-soft); stroke: var(--fixed); stroke-width: 1.5; }
+  svg .box-l { fill: var(--learn-soft); stroke: var(--learn); stroke-width: 1.5; }
+  svg .box-n { fill: var(--paper); stroke: var(--line); stroke-width: 1.2; }
+  svg .arrow { stroke: var(--ink); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+  svg .arrow-f { stroke: var(--fixed); stroke-width: 1.8; fill: none; marker-end: url(#ahf); }
+  svg .arrow-l { stroke: var(--learn); stroke-width: 1.8; fill: none; marker-end: url(#ahl); }
+  svg .arrow-k { stroke: var(--ok); stroke-width: 2.2; fill: none; marker-end: url(#ahk); }
+  ul { margin: 6px 0 0; padding-left: 1.3em; max-width: 68ch; }
+  li { margin: 2px 0; }
+  code { font-family: var(--font-mono); font-size: .9em; background: var(--bg); padding: 1px 5px; border-radius: 3px; }
+  .note { font-size: .9rem; color: var(--muted); margin: 8px 0 0; max-width: 68ch; }
+</style>
+
+<main>
+  <header>
+    <h1>Flow Matching、CFG 与 LDM 图解</h1>
+    <p>第二页，接着上一页的 diffusion。五张图：直线路径、把提示词音量调大、在缩略码上扩散、按顺序读 vs 摊开看、把动作当文字。</p>
+    <div class="legend"><span class="f">固定、没有参数</span><span class="l">神经网络，训练时更新</span><span class="n">随机噪声</span></div>
+  </header>
+
+  <!-- 1. Flow matching -->
+  <section>
+    <h2>① Flow matching／rectified flow：从雪花到图走直线</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 300" width="820" height="300" role="img" aria-label="Diffusion 弯路与 flow matching 直线对比">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink)"/></marker>
+          <marker id="ahf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--fixed)"/></marker>
+          <marker id="ahl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--learn)"/></marker>
+          <marker id="ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ok)"/></marker>
+          <pattern id="snow2" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="var(--paper)"/><circle cx="1.5" cy="1.5" r="1.2" fill="var(--noise)"/><circle cx="4.5" cy="4" r="1" fill="var(--noise)"/></pattern>
+        </defs>
+        <!-- 左：两端 -->
+        <rect x="40" y="90" width="70" height="70" rx="6" fill="url(#snow2)" stroke="var(--line)"/>
+        <text x="75" y="180" text-anchor="middle" class="mono">z 雪花</text><text x="75" y="198" text-anchor="middle" class="muted">t = 1</text>
+        <rect x="430" y="90" width="70" height="70" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="465" y="135" text-anchor="middle" font-size="30">🐱</text>
+        <text x="465" y="180" text-anchor="middle" class="mono">x 真图</text><text x="465" y="198" text-anchor="middle" class="muted">t = 0</text>
+        <!-- diffusion 弯路 -->
+        <path d="M115 115 C 180 30, 300 40, 380 70 S 420 100, 428 112" stroke="var(--fixed)" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#ahf)"/>
+        <text x="260" y="48" text-anchor="middle" class="muted">DDPM：方差保持的弯路，噪声表 β_t 有一堆讲究</text>
+        <!-- 直线 -->
+        <path class="arrow-k" d="M115 135 L 425 135"/>
+        <circle cx="270" cy="135" r="5" fill="var(--ok)"/>
+        <text x="270" y="160" text-anchor="middle" class="mono">x_t = (1−t)·x + t·z</text>
+        <text x="270" y="230" text-anchor="middle">flow matching：直线。t 走到哪，x_t 就在线上哪一点</text>
+        <!-- 速度 -->
+        <path class="arrow-l" d="M270 128 L 330 128"/>
+        <text x="300" y="118" text-anchor="middle" class="mono" fill="var(--learn)">v = z − x</text>
+        <!-- 右：训练与采样 -->
+        <rect x="560" y="40" width="240" height="100" rx="6" class="box-l"/>
+        <text x="680" y="62" text-anchor="middle" font-weight="700">训练</text>
+        <text x="572" y="84" class="mono">抽 x、z、t；算 x_t</text>
+        <text x="572" y="104" class="mono">网络 f_θ(x_t, t) 猜方向 v</text>
+        <text x="572" y="124" class="mono">损失 ‖f_θ − (z − x)‖²</text>
+        <rect x="560" y="160" width="240" height="100" rx="6" class="box-n"/>
+        <text x="680" y="182" text-anchor="middle" font-weight="700">采样（T 常 50）</text>
+        <text x="572" y="204" class="mono">从 z 出发</text>
+        <text x="572" y="224" class="mono">每步 x ← x − f_θ(x, t)/T</text>
+        <text x="572" y="244" class="muted">沿方向走小步，走到 t = 0</text>
+        <text x="40" y="280" class="muted">和 diffusion 是一家人：都是"加噪 → 学去噪 → 多步采样"。差别只有两处：路径换成直线，"猜噪声"换成"猜方向"。</text>
+      </svg>
+    </div>
+    <ul>
+      <li>Lecture 12 约定 t = 0 是数据、t = 1 是噪声；Lecture 9 反过来。做题先看题目怎么定义 t。</li>
+      <li>一维例：x = 4，z = 0，t = 0.25 → x_t = 3，v = −4；从 0 出发 T = 4 步，每步 +1，正好回到 4。</li>
+    </ul>
+  </section>
+
+  <!-- 2. CFG -->
+  <section>
+    <h2>② CFG：把"有提示 − 没提示"的差放大</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 320" width="820" height="320" role="img" aria-label="Classifier-free guidance 向量示意">
+        <!-- 左：训练 -->
+        <text x="20" y="24" font-weight="700">训练时：随机把提示词抹掉</text>
+        <rect x="20" y="40" width="130" height="44" rx="6" class="box-n"/><text x="85" y="67" text-anchor="middle">"raspberry beret"</text>
+        <rect x="20" y="96" width="130" height="44" rx="6" class="box-n" stroke-dasharray="4 3"/><text x="85" y="123" text-anchor="middle" class="muted">∅（约 10–30% 抹掉）</text>
+        <path class="arrow" d="M155 62 H190"/><path class="arrow" d="M155 118 H190"/>
+        <rect x="195" y="56" width="120" height="70" rx="6" class="box-l"/><text x="255" y="86" text-anchor="middle">同一个网络</text><text x="255" y="106" text-anchor="middle" class="muted">既会条件也会无条件</text>
+        <!-- 右：采样向量图 -->
+        <text x="380" y="24" font-weight="700">采样时：两个方向，放大差值</text>
+        <g transform="translate(400,70)">
+          <rect x="0" y="0" width="60" height="60" rx="6" fill="url(#snow2)" stroke="var(--line)"/>
+          <text x="30" y="80" text-anchor="middle" class="mono">x_t</text>
+          <!-- unconditional -->
+          <path class="arrow-f" d="M60 30 L 170 70"/>
+          <text x="125" y="40" class="mono" fill="var(--fixed)">v_∅ 没提示</text>
+          <!-- conditional -->
+          <path class="arrow" d="M60 30 L 200 10"/>
+          <text x="140" y="0" class="mono">v_y 有提示</text>
+          <!-- cfg -->
+          <path class="arrow-k" d="M60 30 L 300 −50"/>
+          <text x="230" y="−54" class="mono" fill="var(--ok)">v_cfg = (1+w)·v_y − w·v_∅</text>
+          <!-- 差值虚线 -->
+          <path d="M170 70 L 200 10" stroke="var(--learn)" stroke-width="1.4" stroke-dasharray="4 3" fill="none" marker-end="url(#ahl)"/>
+          <text x="205" y="50" class="mono" fill="var(--learn)">差 = v_y − v_∅</text>
+          <text x="0" y="120" class="muted">把橙色的差乘 w 倍，再加到 v_y 上，就是绿色方向：</text>
+          <text x="0" y="140" class="muted">更朝"树莓贝雷帽"那一团图走，而不是朝"一般图片"走。</text>
+        </g>
+        <!-- 底部结论 -->
+        <rect x="20" y="230" width="780" height="70" rx="6" class="box-n"/>
+        <text x="32" y="252">w = 0：普通条件生成。w 越大：越贴文字，但图更呆、更不多样。每步要算两次网络 → 采样成本翻倍。</text>
+        <text x="32" y="274">能用：diffusion、rectified flow（每步都有"方向"可以放大）。不能用：GAN、VAE（一步出图，没有逐步的方向）。</text>
+        <text x="32" y="294" class="muted">"classifier-free" 的意思：老办法 classifier guidance 要另训一个分类器给方向；CFG 用模型自己的两种猜法代替，不要分类器。</text>
+      </svg>
+    </div>
+    <ul>
+      <li>一维例：v_y = 2，v_∅ = 1。w = 0 → 2；w = 1 → 3；w = 3 → 5。</li>
+      <li>Lecture 9 写法 <code>s·(ε_c − ε_∅) + ε_∅</code>，s = 1 + w，同一个式子。</li>
+    </ul>
+  </section>
+
+  <!-- 3. LDM -->
+  <section>
+    <h2>③ Latent diffusion：先压成缩略码，在缩略码上擦雾</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 330" width="820" height="330" role="img" aria-label="Latent diffusion 三步流程">
+        <!-- 第一步：训 VAE -->
+        <text x="20" y="24" font-weight="700">步骤 1：训一个 VAE 压缩器（之后冻结 encoder）</text>
+        <rect x="20" y="40" width="80" height="60" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="60" y="78" text-anchor="middle" font-size="26">🐱</text>
+        <text x="60" y="118" text-anchor="middle" class="mono">256×256×3</text>
+        <path class="arrow" d="M105 70 H135"/>
+        <rect x="140" y="45" width="90" height="50" rx="6" class="box-l"/><text x="185" y="75" text-anchor="middle">Encoder</text>
+        <path class="arrow" d="M235 70 H265"/>
+        <rect x="270" y="52" width="36" height="36" rx="4" fill="var(--warn)" opacity=".8"/>
+        <text x="288" y="118" text-anchor="middle" class="mono">32×32×16</text><text x="288" y="134" text-anchor="middle" class="muted">latent，小 48 倍</text>
+        <path class="arrow" d="M311 70 H341"/>
+        <rect x="346" y="45" width="90" height="50" rx="6" class="box-l"/><text x="391" y="75" text-anchor="middle">Decoder</text>
+        <path class="arrow" d="M441 70 H471"/>
+        <rect x="476" y="40" width="80" height="60" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="516" y="78" text-anchor="middle" font-size="26">🐱</text>
+        <text x="516" y="118" text-anchor="middle" class="muted">重建</text>
+        <rect x="600" y="40" width="200" height="60" rx="6" class="box-l"/><text x="700" y="62" text-anchor="middle">+ GAN 判别器</text><text x="700" y="82" text-anchor="middle" class="muted">decoder 模糊就逼它清晰</text>
+        <text x="600" y="120" class="muted">所以是 VAE + GAN + diffusion</text>
+
+        <!-- 第二步：在 latent 上扩散 -->
+        <text x="20" y="170" font-weight="700">步骤 2：在 latent 上做 diffusion（encoder ❄ 冻结）</text>
+        <rect x="20" y="186" width="36" height="36" rx="4" fill="var(--warn)" opacity=".8"/>
+        <path class="arrow-f" d="M62 204 H110"/><text x="86" y="196" text-anchor="middle" class="muted" font-size="11">加雾</text>
+        <rect x="115" y="186" width="36" height="36" rx="4" fill="url(#snow2)" stroke="var(--line)"/>
+        <path class="arrow-l" d="M157 204 H205"/><text x="181" y="196" text-anchor="middle" class="muted" font-size="11">擦雾</text>
+        <rect x="210" y="180" width="130" height="48" rx="6" class="box-l"/><text x="275" y="200" text-anchor="middle">去噪网络</text><text x="275" y="218" text-anchor="middle" class="muted">U-Net 或 DiT</text>
+        <text x="360" y="204" class="muted">和上一页的 diffusion 完全一样，只是对象从像素换成 latent，便宜很多</text>
+
+        <!-- 第三步：生成 -->
+        <text x="20" y="270" font-weight="700">步骤 3：生成</text>
+        <rect x="130" y="252" width="36" height="36" rx="4" fill="url(#snow2)" stroke="var(--line)"/>
+        <text x="148" y="306" text-anchor="middle" class="muted" font-size="11">随机 latent</text>
+        <path class="arrow-l" d="M172 270 H215"/><text x="193" y="262" text-anchor="middle" class="muted" font-size="11">擦 T 步</text>
+        <rect x="220" y="252" width="36" height="36" rx="4" fill="var(--warn)" opacity=".8"/>
+        <path class="arrow" d="M262 270 H300"/>
+        <rect x="305" y="246" width="90" height="48" rx="6" class="box-l"/><text x="350" y="275" text-anchor="middle">Decoder</text>
+        <path class="arrow" d="M400 270 H438"/>
+        <rect x="443" y="242" width="70" height="56" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="478" y="278" text-anchor="middle" font-size="26">🐱</text>
+        <text x="540" y="262" class="muted">文生图：再接一个文本编码器（T5／CLIP），</text><text x="540" y="282" class="muted">去噪网络用 Transformer（DiT），文本走 cross-attention。</text><text x="540" y="302" class="muted">视频：latent 多一维时间。</text>
+      </svg>
+    </div>
+    <ul>
+      <li>512×512×3，D = 8、C = 16 → 64×64×16，数值个数是像素的 1/12。</li>
+      <li>陷阱："训扩散时 encoder 也更新"✗；"在像素上直接扩散"✗（那是 Imagen 一类，不叫 latent）。</li>
+    </ul>
+  </section>
+
+  <!-- 4. 序列模型比较 -->
+  <section>
+    <h2>④ 四种序列模型：按顺序读 vs 摊开同时看</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 330" width="820" height="330" role="img" aria-label="RNN/LSTM 顺序处理与 self-attention 全连接对比">
+        <!-- 左：RNN -->
+        <text x="20" y="24" font-weight="700">RNN／LSTM：一个字一个字读</text>
+        <g>
+          <rect x="20" y="60" width="50" height="40" rx="6" class="box-l"/><text x="45" y="85" text-anchor="middle" class="mono">h₁</text>
+          <path class="arrow" d="M75 80 H105"/>
+          <rect x="110" y="60" width="50" height="40" rx="6" class="box-l"/><text x="135" y="85" text-anchor="middle" class="mono">h₂</text>
+          <path class="arrow" d="M165 80 H195"/>
+          <rect x="200" y="60" width="50" height="40" rx="6" class="box-l"/><text x="225" y="85" text-anchor="middle" class="mono">h₃</text>
+          <path class="arrow" d="M255 80 H285"/>
+          <rect x="290" y="60" width="50" height="40" rx="6" class="box-l"/><text x="315" y="85" text-anchor="middle" class="mono">h₄</text>
+          <text x="45" y="130" text-anchor="middle">The</text><text x="135" y="130" text-anchor="middle">cat</text><text x="225" y="130" text-anchor="middle">sat</text><text x="315" y="130" text-anchor="middle">down</text>
+          <path class="arrow" d="M45 118 V105"/><path class="arrow" d="M135 118 V105"/><path class="arrow" d="M225 118 V105"/><path class="arrow" d="M315 118 V105"/>
+        </g>
+        <text x="20" y="165" class="muted">同一组权重每步用一次；h₄ 必须等 h₃。</text>
+        <text x="20" y="185" class="muted">LSTM 多一条 cell state 和三个门，记得更久。</text>
+        <text x="20" y="215">顺序打乱 → 结果变（不是置换不变）</text>
+        <text x="20" y="237">不能并行（一步等一步）</text>
+        <text x="20" y="259">内存省：只存一段 h（不随 n 增长）</text>
+
+        <!-- 右：attention -->
+        <text x="440" y="24" font-weight="700">Self-attention：整页摊开，每个字看所有字</text>
+        <g>
+          <text x="470" y="80" text-anchor="middle">The</text><text x="560" y="80" text-anchor="middle">cat</text><text x="650" y="80" text-anchor="middle">sat</text><text x="740" y="80" text-anchor="middle">down</text>
+          <g stroke="var(--learn)" stroke-width="1.2" opacity=".75" fill="none">
+            <path d="M470 90 L560 130"/><path d="M470 90 L650 130"/><path d="M470 90 L740 130"/><path d="M470 90 L470 130"/>
+            <path d="M560 90 L470 130"/><path d="M560 90 L560 130"/><path d="M560 90 L650 130"/><path d="M560 90 L740 130"/>
+            <path d="M650 90 L470 130"/><path d="M650 90 L560 130"/><path d="M650 90 L650 130"/><path d="M650 90 L740 130"/>
+            <path d="M740 90 L470 130"/><path d="M740 90 L560 130"/><path d="M740 90 L650 130"/><path d="M740 90 L740 130"/>
+          </g>
+          <rect x="445" y="130" width="50" height="30" rx="5" class="box-l"/><rect x="535" y="130" width="50" height="30" rx="5" class="box-l"/><rect x="625" y="130" width="50" height="30" rx="5" class="box-l"/><rect x="715" y="130" width="50" height="30" rx="5" class="box-l"/>
+        </g>
+        <!-- n×n 表 -->
+        <g transform="translate(460,185)">
+          <rect x="0" y="0" width="80" height="80" fill="var(--fixed-soft)" stroke="var(--fixed)"/>
+          <path d="M20 0 V80 M40 0 V80 M60 0 V80 M0 20 H80 M0 40 H80 M0 60 H80" stroke="var(--fixed)" stroke-width=".6"/>
+          <text x="40" y="98" text-anchor="middle" class="mono">n×n 分数表</text>
+        </g>
+        <text x="560" y="215">不加位置编码时打乱顺序结果不变</text>
+        <text x="560" y="233" class="muted">（置换不变，所以才需要位置编码）</text>
+        <text x="560" y="259">天然并行（所有字同时算）</text>
+        <text x="560" y="281">内存费：要存 n×n 的表</text>
+        <text x="440" y="315" class="muted">Self-attention 可以插进 CNN（non-local block）；加了位置编码的 transformer 就不再置换不变。</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 5. VLA -->
+  <section>
+    <h2>⑤ VLA：多模态 LLM 再多吐一种东西，动作</h2>
+    <div class="fig">
+      <svg viewBox="0 0 820 230" width="820" height="230" role="img" aria-label="VLA 把动作当文字生成">
+        <rect x="20" y="40" width="80" height="60" rx="6" fill="var(--ok-soft)" stroke="var(--line)"/><text x="60" y="78" text-anchor="middle" font-size="26">📷</text><text x="60" y="118" text-anchor="middle" class="muted">摄像头画面</text>
+        <rect x="20" y="130" width="160" height="40" rx="6" class="box-n"/><text x="100" y="155" text-anchor="middle">"把杯子拿过来"</text>
+        <path class="arrow" d="M105 70 H160 V85 H230"/><path class="arrow" d="M185 150 H205 V85 H230"/>
+        <rect x="235" y="50" width="170" height="70" rx="6" class="box-l"/><text x="320" y="78" text-anchor="middle" font-weight="700">多模态 LLM</text><text x="320" y="98" text-anchor="middle" class="muted">三件套同上一页</text>
+        <path class="arrow" d="M410 85 H445"/>
+        <rect x="450" y="50" width="200" height="70" rx="6" class="box-n"/><text x="550" y="74" text-anchor="middle" class="mono">1 128 91 241 5 101 127 217</text><text x="550" y="96" text-anchor="middle" class="muted">RT-2：动作写成一串数字"文字"</text><text x="550" y="112" text-anchor="middle" class="muted">于是和翻译是同一个任务</text>
+        <path class="arrow" d="M655 85 H690"/>
+        <text x="700" y="80" font-size="28">🦾</text><text x="700" y="112" class="muted">机械臂执行</text>
+        <text x="20" y="200" class="muted">分层（工业常用）：看和做分开训，动作限于技能库。端到端（学术）：一步从画面＋指令出动作。OpenVLA 7B 比 RT-2 55B 小，强在快速微调。LoRA、RLHF、DPO 可直接用。</text>
+      </svg>
+    </div>
+  </section>
+
+  <p class="note">对应卡片：概念/Diffusion-FlowMatching-CFG-LDM、概念/序列模型比较、概念/多模态与VLA。讲义页：Lecture 12 第 8–23、28–38、51–63 页；Lecture 4 第 14–15、32、53 页；Lecture 11 第 31–57 页。第一页图解（diffusion、多模态三件套、CLIP、LLaVA）另见 diffusion与多模态.html。</p>
+</main>

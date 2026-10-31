@@ -43,6 +43,8 @@
 
 [Diffusion 与多模态图解](图解/diffusion与多模态.html)：加雾／擦雾时间线、训练与采样循环、方差保持、多模态三件套、CLIP 配对矩阵、LLaVA 冻结图。在线版 https://claude.ai/artifact/QCcaEWea7k6izudjB3yrpa（考场若禁外站，提前把 HTML 存到本地用浏览器打开）。
 
+[Flow Matching、CFG 与 LDM 图解](图解/流匹配CFG与LDM.html)：直线路径 vs 弯路、CFG 放大差值的向量图、latent diffusion 三步、RNN 顺序读 vs attention 摊开看、VLA 把动作当文字。在线版 https://claude.ai/artifact/HznhhD5AMX36Qsguarpu5G。
+
 ## 三、多选陷阱词
 
 见 [陷阱词](陷阱词.md)：限制词排除、能力陈述偏宽通常对、生成模型"需要标签"永远错，等等。
